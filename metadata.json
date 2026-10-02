@@ -1,0 +1,6 @@
+{
+  "name": "Peletko",
+  "description": "Praćenje dnevne potrošnje peleta, stanja magacina i troškova grijanja u KM sa preciznom statistikom.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
