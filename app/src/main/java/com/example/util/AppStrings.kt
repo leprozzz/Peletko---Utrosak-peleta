@@ -123,7 +123,7 @@ object AppStrings {
         "about_app" to "O aplikaciji",
         "developer" to "Developer",
         "developer_name" to "ProleApps",
-        "app_version" to "Verzija 1.0.2",
+        "app_version" to "Verzija 1.0.3",
         "privacy_policy" to "Politika privatnosti",
         "privacy_policy_desc" to "Pogledajte kako štitimo vaše podatke (leprozzz.github.io)",
         "app_description" to "Jednostavno i precizno praćenje potrošnje peleta, stanja zaliha u magacinu i troškova grijanja uz automatsku vremensku prognozu.",
@@ -156,7 +156,8 @@ object AppStrings {
         "pallet_price_note" to "Unesi cijenu po paleti (1 paleta = 70 vreća)",
         "property_info" to "Informacije o objektu",
         "property_info_sub" to "Snaga kotla, grejna površina, izolacija, grad i pelet",
-        "season_locked_hint" to "Tekuća sezona je automatski deklarisana (zaključano)"
+        "season_locked_hint" to "Tekuća sezona je automatski deklarisana (zaključano)",
+        "forecast_log_prompt" to "Unesi potrošnju za proračun"
     )
 
     private val sr = mapOf(
@@ -230,7 +231,7 @@ object AppStrings {
         "specific_consumption" to "Specifična potrošnja",
         "boiler_load" to "Opterećenje snage",
         "cost_by_area" to "Trošak po površini",
-        "daily_average" to "Dnevni prosek",
+        "daily_average" to "Dnevni prosjek",
         "unit_per_day" to "dan",
         "unit_per_day_short" to "vr/dan",
         "sample_days_short" to "d.",
@@ -270,7 +271,7 @@ object AppStrings {
         "about_app" to "O aplikaciji",
         "developer" to "Developer",
         "developer_name" to "ProleApps",
-        "app_version" to "Verzija 1.0.2",
+        "app_version" to "Verzija 1.0.3",
         "privacy_policy" to "Politika privatnosti",
         "privacy_policy_desc" to "Pogledajte kako štitimo vaše podatke (leprozzz.github.io)",
         "app_description" to "Jednostavno i precizno praćenje potrošnje peleta, stanja zaliha u magacinu i troškova grejanja uz automatsku vremensku prognozu.",
@@ -303,7 +304,8 @@ object AppStrings {
         "pallet_price_note" to "Unesi cenu po paleti (1 paleta = 70 vreća)",
         "property_info" to "Informacije o objektu",
         "property_info_sub" to "Snaga kotla, grejna površina, izolacija, grad i pelet",
-        "season_locked_hint" to "Tekuća sezona je automatski deklarisana (zaključano)"
+        "season_locked_hint" to "Tekuća sezona je automatski deklarisana (zaključano)",
+        "forecast_log_prompt" to "Unesi potrošnju za proračun"
     )
 
     private val hr = mapOf(
@@ -417,7 +419,7 @@ object AppStrings {
         "about_app" to "O aplikaciji",
         "developer" to "Developer",
         "developer_name" to "ProleApps",
-        "app_version" to "Verzija 1.0.2",
+        "app_version" to "Verzija 1.0.3",
         "privacy_policy" to "Politika privatnosti",
         "privacy_policy_desc" to "Pogledajte kako štitimo vaše podatke (leprozzz.github.io)",
         "app_description" to "Jednostavno i precizno praćenje potrošnje peleta, stanja zaliha u skladištu i troškova grijanja uz automatsku vremensku prognozu.",
@@ -450,7 +452,8 @@ object AppStrings {
         "pallet_price_note" to "Unesi cijenu po paleti (1 paleta = 70 vreća)",
         "property_info" to "Informacije o objektu",
         "property_info_sub" to "Snaga peći, grijana površina, izolacija, grad i pelet",
-        "season_locked_hint" to "Tekuća sezona je automatski deklarirana (zaključano)"
+        "season_locked_hint" to "Tekuća sezona je automatski deklarirana (zaključano)",
+        "forecast_log_prompt" to "Unesi potrošnju za proračun"
     )
 
     private val en = mapOf(
@@ -564,7 +567,7 @@ object AppStrings {
         "about_app" to "About App",
         "developer" to "Developer",
         "developer_name" to "ProleApps",
-        "app_version" to "Version 1.0.2",
+        "app_version" to "Version 1.0.3",
         "privacy_policy" to "Privacy Policy",
         "privacy_policy_desc" to "Learn how your data is protected (leprozzz.github.io)",
         "app_description" to "Simple and accurate tracking of pellet consumption, warehouse inventory, and heating costs with automated weather forecasting.",
@@ -597,6 +600,7 @@ object AppStrings {
         "pallet_price_note" to "Enter price per pallet (1 pallet = 70 bags)",
         "property_info" to "Property information",
         "property_info_sub" to "Boiler power, heated area, insulation, city & pellet",
-        "season_locked_hint" to "Current season is automatically declared (locked)"
+        "season_locked_hint" to "Current season is automatically declared (locked)",
+        "forecast_log_prompt" to "Log consumption for calculation"
     )
 }

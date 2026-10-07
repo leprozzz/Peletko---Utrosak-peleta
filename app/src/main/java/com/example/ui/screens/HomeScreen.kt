@@ -542,7 +542,7 @@ fun HomeScreen(
                                     val avgUnit = if (lang.lowercase() == "en") "b/d" else "vr/d"
                                     "${PelletCalculator.formatNumber(inventory.avgBagsPerDay, 1)} $avgUnit"
                                 } else {
-                                    if (lang.lowercase() == "en") "Log heating for forecast" else "Unesite loženje za proračun"
+                                    AppStrings.get("forecast_log_prompt", lang)
                                 },
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,

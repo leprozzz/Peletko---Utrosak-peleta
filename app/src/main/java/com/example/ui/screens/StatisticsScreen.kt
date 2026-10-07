@@ -317,7 +317,7 @@ fun StatisticsScreen(
                             title = "$currSymbol / $dayUnit",
                             value = PelletCalculator.formatNumber(metrics.kmPerDay, 2),
                             unit = "$currSymbol/$dayUnit",
-                            subtitle = "${AppStrings.get("daily_average", lang)} (~${PelletCalculator.formatNumber(metrics.avgBagsPerDay, 1)} ${if (lang.lowercase() == "en") "b/d" else "vr/d"})",
+                            subtitle = AppStrings.get("daily_average", lang),
                             icon = Icons.Default.CalendarToday,
                             iconColor = Color(0xFF3B82F6),
                             modifier = Modifier.weight(1f)

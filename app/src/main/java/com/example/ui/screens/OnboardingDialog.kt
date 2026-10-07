@@ -879,7 +879,7 @@ fun OnboardingScreen(
                                     }
                                 },
                                 label = { Text(palletPriceNote) },
-                                placeholder = { Text("Unesi cijenu po paleti (1 paleta = 70 vreća)") },
+                                placeholder = { Text(AppStrings.get("pallet_price_note", selectedLanguage)) },
                                 isError = priceHasError,
                                 supportingText = if (priceHasError) {
                                     { Text(AppStrings.get("field_required", selectedLanguage), color = MaterialTheme.colorScheme.error) }
@@ -905,7 +905,7 @@ fun OnboardingScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "Deklarisana sezona: ",
+                                        text = "${AppStrings.get("current_season_label", selectedLanguage)}: ",
                                         fontSize = 12.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -917,7 +917,7 @@ fun OnboardingScreen(
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = "(informativno)",
+                                        text = if (selectedLanguage == "en") "(informative)" else "(informativno)",
                                         fontSize = 11.sp,
                                         color = MaterialTheme.colorScheme.outline
                                     )
