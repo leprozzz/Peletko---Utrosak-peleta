@@ -431,9 +431,9 @@ object PelletCalculator {
             val date = parser.parse(isoDate) ?: return isoDate
             val locale = when (lang.lowercase()) {
                 "en" -> Locale.ENGLISH
-                "sr" -> Locale("sr", "RS")
-                "hr" -> Locale("hr", "HR")
-                else -> Locale("bs", "BA")
+                "sr" -> Locale.forLanguageTag("sr-RS")
+                "hr" -> Locale.forLanguageTag("hr-HR")
+                else -> Locale.forLanguageTag("bs-BA")
             }
             val pattern = if (lang.lowercase() == "en") "MMM dd, yyyy" else "dd. MMM yyyy."
             val formatter = SimpleDateFormat(pattern, locale)

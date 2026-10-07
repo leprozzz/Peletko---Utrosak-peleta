@@ -14,6 +14,9 @@ class PelletRepository(private val pelletDao: PelletDao) {
     suspend fun getAllEntriesOnce(): List<PelletEntry> =
         pelletDao.getAllEntriesOnce()
 
+    suspend fun getAllPurchasesOnce(): List<PelletPurchase> =
+        pelletDao.getAllPurchasesOnce()
+
     suspend fun getSettingsOnce(): AppSettings? =
         pelletDao.getSettingsOnce()
 

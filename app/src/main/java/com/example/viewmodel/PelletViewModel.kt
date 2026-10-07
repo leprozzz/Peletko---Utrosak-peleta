@@ -418,11 +418,27 @@ class PelletViewModel(
 
             // Tekuća sezona deklarisana prema godini unosa (npr. 2026 -> 2026/2027)
             val declaredSeason = PelletCalculator.computeSeason(dateISO)
-            val updatedSettings = settings.value.copy(currentSeason = declaredSeason)
+            val currentSett = repository.getSettingsOnce() ?: settings.value
+            val updatedSettings = currentSett.copy(currentSeason = declaredSeason)
             repository.updateSettings(updatedSettings)
 
             val lang = settings.value.language
             _notification.emit(UiNotification("${AppStrings.get("purchase_saved", lang)}: ${bags.toInt()} vr. (Sezona $declaredSeason)", isWarning = false))
+        }
+    }
+
+    init {
+        // Automatsko čišćenje eventualnih duplikata početnog stanja nastalih višekratnim klikom
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val purchases = repository.getAllPurchasesOnce()
+                val initialPurchases = purchases.filter { it.notes.contains("Početno stanje magacina", ignoreCase = true) }
+                if (initialPurchases.size > 1) {
+                    // Zadrži prvi (najnoviji po ID/datumu), a obriši duplikate
+                    val duplicates = initialPurchases.drop(1)
+                    duplicates.forEach { repository.deletePurchase(it) }
+                }
+            } catch (_: Exception) {}
         }
     }
 
@@ -513,18 +529,34 @@ class PelletViewModel(
 
             // Ako je korisnik unio početno stanje u paletama ili vrećama
             if (initialPallets > 0) {
-                val bags = initialPallets * PelletCalculator.BAGS_PER_PALLET
-                val totalKM = initialPallets * (if (palletPriceKM > 0) palletPriceKM else 525.0)
-                savePurchase(
-                    dateISO = today,
-                    pallets = initialPallets,
-                    bags = bags,
-                    totalPriceKM = totalKM,
-                    supplier = brand,
-                    notes = "Početno stanje magacina"
-                )
+                val existingPurchases = repository.getAllPurchasesOnce()
+                val alreadyHasInitial = existingPurchases.any { it.notes.contains("Početno stanje magacina", ignoreCase = true) }
+                if (!alreadyHasInitial) {
+                    val bags = initialPallets * PelletCalculator.BAGS_PER_PALLET
+                    val totalKM = initialPallets * (if (palletPriceKM > 0) palletPriceKM else 525.0)
+                    val kg = bags * PelletCalculator.KG_PER_BAG
+                    val pricePerPallet = if (initialPallets > 0) totalKM / initialPallets else 0.0
+                    val pricePerKg = if (kg > 0) totalKM / kg else 0.0
+
+                    val purchase = PelletPurchase(
+                        dateISO = today,
+                        pallets = initialPallets,
+                        bags = bags,
+                        kg = kg,
+                        totalPriceKM = totalKM,
+                        pricePerPalletKM = pricePerPallet,
+                        pricePerKgKM = pricePerKg,
+                        supplier = brand,
+                        notes = "Početno stanje magacina"
+                    )
+                    repository.insertPurchase(purchase)
+                }
             }
-            syncWeatherHistory()
+
+            // Asinhrono povuci vremenske podatke u pozadini da ne blokira korisnički interfejs
+            viewModelScope.launch(Dispatchers.IO) {
+                syncWeatherHistory(notify = false)
+            }
         }
     }
 }

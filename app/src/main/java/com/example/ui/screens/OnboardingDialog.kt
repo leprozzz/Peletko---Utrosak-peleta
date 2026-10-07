@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Paid
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -83,6 +84,7 @@ fun OnboardingScreen(
     ) -> Unit
 ) {
     var currentStep by remember { mutableIntStateOf(1) } // 1, 2, 3
+    var isSubmitting by remember { mutableStateOf(false) }
 
     // Korak 1: Jezik, Valuta, Grad
     var selectedLanguage by remember { mutableStateOf("bs") }
@@ -228,6 +230,9 @@ fun OnboardingScreen(
                             if (currentStep < 3) {
                                 currentStep += 1
                             } else {
+                                if (isSubmitting) return@Button
+                                isSubmitting = true
+
                                 val area = areaText.replace(",", ".").toDoubleOrNull() ?: 120.0
                                 val p = powerText.replace(",", ".").toDoubleOrNull() ?: 20.0
                                 val pallets = palletsText.replace(",", ".").toDoubleOrNull() ?: 0.0
@@ -247,6 +252,7 @@ fun OnboardingScreen(
                                 )
                             }
                         },
+                        enabled = !isSubmitting,
                         modifier = Modifier
                             .weight(if (currentStep > 1) 0.62f else 1f)
                             .height(54.dp)
@@ -254,18 +260,26 @@ fun OnboardingScreen(
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
-                        Text(
-                            text = if (currentStep < 3) AppStrings.get("next", selectedLanguage) else AppStrings.get("start_tracking", selectedLanguage),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Icon(
-                            imageVector = if (currentStep < 3) Icons.AutoMirrored.Filled.ArrowForward else Icons.Default.Check,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
+                        if (isSubmitting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.5.dp
+                            )
+                        } else {
+                            Text(
+                                text = if (currentStep < 3) AppStrings.get("next", selectedLanguage) else AppStrings.get("start_tracking", selectedLanguage),
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(
+                                imageVector = if (currentStep < 3) Icons.AutoMirrored.Filled.ArrowForward else Icons.Default.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
             }

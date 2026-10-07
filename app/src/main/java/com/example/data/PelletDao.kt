@@ -42,6 +42,9 @@ interface PelletDao {
     @Query("SELECT * FROM pellet_purchases ORDER BY dateISO DESC, id DESC")
     fun getAllPurchases(): Flow<List<PelletPurchase>>
 
+    @Query("SELECT * FROM pellet_purchases ORDER BY dateISO DESC, id DESC")
+    suspend fun getAllPurchasesOnce(): List<PelletPurchase>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPurchase(purchase: PelletPurchase): Long
 
