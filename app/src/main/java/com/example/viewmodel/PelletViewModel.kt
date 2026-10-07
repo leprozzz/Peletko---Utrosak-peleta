@@ -41,10 +41,15 @@ class PelletViewModel(
     val allPurchases: StateFlow<List<PelletPurchase>> = repository.allPurchases
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val settings: StateFlow<AppSettings> = repository.settings
-        .combine(MutableStateFlow(AppSettings())) { savedSettings, defaultSettings ->
-            savedSettings ?: defaultSettings
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
+    private val _overrideSettings = MutableStateFlow<AppSettings?>(null)
+    val settings: StateFlow<AppSettings> = combine(
+        repository.settings,
+        _overrideSettings
+    ) { roomSettings, override ->
+        override ?: roomSettings ?: AppSettings()
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings())
+
+    private var isCompletingOnboarding = false
 
     private val _notification = MutableSharedFlow<UiNotification>()
     val notification: SharedFlow<UiNotification> = _notification.asSharedFlow()
@@ -484,6 +489,7 @@ class PelletViewModel(
     }
 
     fun updateSettings(newSettings: AppSettings) {
+        _overrideSettings.value = newSettings
         viewModelScope.launch {
             repository.updateSettings(newSettings)
             val lang = newSettings.language
@@ -504,53 +510,65 @@ class PelletViewModel(
         initialPallets: Double,
         palletPriceKM: Double,
         currency: String = "BAM",
-        language: String = "bs",
+        language: String = "sr",
         themeMode: String = "SYSTEM"
     ) {
+        if (isCompletingOnboarding) return
+        isCompletingOnboarding = true
+
+        val today = PelletCalculator.getTodayISO()
+        val season = PelletCalculator.computeSeason(today)
+        val newSettings = AppSettings(
+            id = 1,
+            heatingAreaM2 = areaM2,
+            boilerPowerKw = powerKw,
+            insulationLevel = insulation,
+            city = city,
+            pelletBrand = brand,
+            pelletClass = pelletClass,
+            defaultPricePerPalletKM = if (palletPriceKM > 0) palletPriceKM else 525.0,
+            isOnboarded = true,
+            currentSeason = season,
+            currency = currency,
+            language = language,
+            themeMode = themeMode
+        )
+
+        // Odmah ažuriraj u memoriji da interfejs momentalno pređe na glavni ekran
+        _overrideSettings.value = newSettings
+
         viewModelScope.launch {
-            val today = PelletCalculator.getTodayISO()
-            val season = PelletCalculator.computeSeason(today)
-            val newSettings = AppSettings(
-                id = 1,
-                heatingAreaM2 = areaM2,
-                boilerPowerKw = powerKw,
-                insulationLevel = insulation,
-                city = city,
-                pelletBrand = brand,
-                pelletClass = pelletClass,
-                defaultPricePerPalletKM = if (palletPriceKM > 0) palletPriceKM else 525.0,
-                isOnboarded = true,
-                currentSeason = season,
-                currency = currency,
-                language = language,
-                themeMode = themeMode
-            )
-            repository.updateSettings(newSettings)
+            try {
+                repository.updateSettings(newSettings)
 
-            // Ako je korisnik unio početno stanje u paletama ili vrećama
-            if (initialPallets > 0) {
-                val existingPurchases = repository.getAllPurchasesOnce()
-                val alreadyHasInitial = existingPurchases.any { it.notes.contains("Početno stanje magacina", ignoreCase = true) }
-                if (!alreadyHasInitial) {
-                    val bags = initialPallets * PelletCalculator.BAGS_PER_PALLET
-                    val totalKM = initialPallets * (if (palletPriceKM > 0) palletPriceKM else 525.0)
-                    val kg = bags * PelletCalculator.KG_PER_BAG
-                    val pricePerPallet = if (initialPallets > 0) totalKM / initialPallets else 0.0
-                    val pricePerKg = if (kg > 0) totalKM / kg else 0.0
+                // Ako je korisnik unio početno stanje u paletama ili vrećama
+                if (initialPallets > 0) {
+                    val existingPurchases = repository.getAllPurchasesOnce()
+                    val alreadyHasInitial = existingPurchases.any { it.notes.contains("Početno stanje magacina", ignoreCase = true) }
+                    if (!alreadyHasInitial) {
+                        val bags = initialPallets * PelletCalculator.BAGS_PER_PALLET
+                        val totalKM = initialPallets * (if (palletPriceKM > 0) palletPriceKM else 525.0)
+                        val kg = bags * PelletCalculator.KG_PER_BAG
+                        val pricePerPallet = if (initialPallets > 0) totalKM / initialPallets else 0.0
+                        val pricePerKg = if (kg > 0) totalKM / kg else 0.0
 
-                    val purchase = PelletPurchase(
-                        dateISO = today,
-                        pallets = initialPallets,
-                        bags = bags,
-                        kg = kg,
-                        totalPriceKM = totalKM,
-                        pricePerPalletKM = pricePerPallet,
-                        pricePerKgKM = pricePerKg,
-                        supplier = brand,
-                        notes = "Početno stanje magacina"
-                    )
-                    repository.insertPurchase(purchase)
+                        val purchase = PelletPurchase(
+                            dateISO = today,
+                            pallets = initialPallets,
+                            bags = bags,
+                            kg = kg,
+                            totalPriceKM = totalKM,
+                            pricePerPalletKM = pricePerPallet,
+                            pricePerKgKM = pricePerKg,
+                            supplier = brand,
+                            notes = "Početno stanje magacina"
+                        )
+                        repository.insertPurchase(purchase)
+                    }
                 }
+            } catch (_: Exception) {
+            } finally {
+                isCompletingOnboarding = false
             }
 
             // Asinhrono povuci vremenske podatke u pozadini da ne blokira korisnički interfejs

@@ -29,13 +29,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Fireplace
 import androidx.compose.material.icons.filled.Grade
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Paid
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -52,6 +52,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -83,25 +84,34 @@ fun OnboardingScreen(
         language: String
     ) -> Unit
 ) {
-    var currentStep by remember { mutableIntStateOf(1) } // 1, 2, 3
-    var isSubmitting by remember { mutableStateOf(false) }
+    var currentStep by rememberSaveable { mutableIntStateOf(1) } // 1, 2, 3
+    var isSubmitting by rememberSaveable { mutableStateOf(false) }
 
-    // Korak 1: Jezik, Valuta, Grad
-    var selectedLanguage by remember { mutableStateOf("bs") }
-    var selectedCurrency by remember { mutableStateOf("BAM") }
-    var cityText by remember { mutableStateOf("Sarajevo") }
+    // Validacija i greške
+    var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var cityHasError by rememberSaveable { mutableStateOf(false) }
+    var powerHasError by rememberSaveable { mutableStateOf(false) }
+    var areaHasError by rememberSaveable { mutableStateOf(false) }
+    var brandHasError by rememberSaveable { mutableStateOf(false) }
+    var stockHasError by rememberSaveable { mutableStateOf(false) }
+    var priceHasError by rememberSaveable { mutableStateOf(false) }
 
-    // Korak 2: Snaga peći, kvadratura, izolacija (fokus isključivo na peć i površinu)
-    var areaText by remember { mutableStateOf("120") }
-    var powerText by remember { mutableStateOf("20") }
-    var selectedInsulation by remember { mutableStateOf("Dobra (10cm)") }
+    // Korak 1: Jezik (SR, BA, HR, ENG), Valuta, Grad
+    var selectedLanguage by rememberSaveable { mutableStateOf("sr") }
+    var selectedCurrency by rememberSaveable { mutableStateOf("BAM") }
+    var cityText by rememberSaveable { mutableStateOf("Sarajevo") }
 
-    // Korak 3: Stanje magacina (Proizvođač, Klasa, Dvostrani unos paleta/vreća, cijena)
-    var brandText by remember { mutableStateOf("Medex") }
-    var selectedClass by remember { mutableStateOf("A1") } // "A1", "A2", "Bez klase"
-    var palletsText by remember { mutableStateOf("2.0") }
-    var bagsText by remember { mutableStateOf("140") }
-    var palletPriceText by remember { mutableStateOf("520") }
+    // Korak 2: Snaga peći, kvadratura, izolacija
+    var areaText by rememberSaveable { mutableStateOf("120") }
+    var powerText by rememberSaveable { mutableStateOf("20") }
+    var selectedInsulation by rememberSaveable { mutableStateOf("Dobra (10cm)") }
+
+    // Korak 3: Stanje magacina (Proizvođač, Klasa, Dvostrani unos paleta/vreća, cijena po paleti)
+    var brandText by rememberSaveable { mutableStateOf("Medex") }
+    var selectedClass by rememberSaveable { mutableStateOf("A1") } // "A1", "A2", "Bez klase"
+    var palletsText by rememberSaveable { mutableStateOf("2.0") }
+    var bagsText by rememberSaveable { mutableStateOf("140") }
+    var palletPriceText by rememberSaveable { mutableStateOf("") } // Cijena po paleti starta prazna
 
     val insulationOptions = listOf(
         "Bez izolacije",
@@ -111,10 +121,12 @@ fun OnboardingScreen(
     )
 
     val classOptions = listOf("A1", "A2", "Bez klase")
-    val popularManufacturers = listOf("Medex", "Drvoprodex", "Fagus", "Kovan", "Šišarka", "Ensa", "Foresta", "Moj Pelet", "Omo-Prom")
+    // Omo-Prom obrisan iz brzog biranja prema zahtjevu
+    val popularManufacturers = listOf("Medex", "Drvoprodex", "Fagus", "Kovan", "Šišarka", "Ensa", "Foresta", "Moj Pelet")
 
     val currencies = listOf("BAM", "EUR", "DIN")
-    val languages = listOf("bs" to "BiH", "sr" to "Srp", "hr" to "Hrv", "en" to "Eng")
+    // Redoslijed jezika prema zahtjevu: SR, BA, HR, ENG
+    val languages = listOf("sr" to "SR", "bs" to "BA", "hr" to "HR", "en" to "ENG")
     val popularCities = listOf("Sarajevo", "Banja Luka", "Tuzla", "Mostar", "Zenica", "Beograd", "Novi Sad", "Zagreb")
 
     val todaySeason = PelletCalculator.computeSeason(PelletCalculator.getTodayISO())
@@ -212,7 +224,10 @@ fun OnboardingScreen(
                 ) {
                     if (currentStep > 1) {
                         OutlinedButton(
-                            onClick = { currentStep -= 1 },
+                            onClick = {
+                                errorMessage = null
+                                currentStep -= 1
+                            },
                             modifier = Modifier
                                 .weight(0.38f)
                                 .height(54.dp),
@@ -227,29 +242,100 @@ fun OnboardingScreen(
 
                     Button(
                         onClick = {
-                            if (currentStep < 3) {
-                                currentStep += 1
-                            } else {
-                                if (isSubmitting) return@Button
-                                isSubmitting = true
+                            when (currentStep) {
+                                1 -> {
+                                    // Validacija Koraka 1: Grad ne smije biti prazan
+                                    if (cityText.trim().isBlank()) {
+                                        cityHasError = true
+                                        errorMessage = AppStrings.get("fill_all_fields_error", selectedLanguage)
+                                        return@Button
+                                    }
+                                    cityHasError = false
+                                    errorMessage = null
+                                    currentStep = 2
+                                }
+                                2 -> {
+                                    // Validacija Koraka 2: Kvadratura i Snaga peći moraju biti popunjene i > 0
+                                    val areaVal = areaText.replace(",", ".").toDoubleOrNull()
+                                    val powerVal = powerText.replace(",", ".").toDoubleOrNull()
+                                    var hasErr = false
 
-                                val area = areaText.replace(",", ".").toDoubleOrNull() ?: 120.0
-                                val p = powerText.replace(",", ".").toDoubleOrNull() ?: 20.0
-                                val pallets = palletsText.replace(",", ".").toDoubleOrNull() ?: 0.0
-                                val price = palletPriceText.replace(",", ".").toDoubleOrNull() ?: 520.0
+                                    if (areaText.trim().isBlank() || areaVal == null || areaVal <= 0.0) {
+                                        areaHasError = true
+                                        hasErr = true
+                                    } else {
+                                        areaHasError = false
+                                    }
 
-                                onComplete(
-                                    area,
-                                    p,
-                                    selectedInsulation,
-                                    cityText.ifBlank { "Sarajevo" },
-                                    brandText.ifBlank { "Medex" },
-                                    selectedClass,
-                                    pallets,
-                                    price,
-                                    selectedCurrency,
-                                    selectedLanguage
-                                )
+                                    if (powerText.trim().isBlank() || powerVal == null || powerVal <= 0.0) {
+                                        powerHasError = true
+                                        hasErr = true
+                                    } else {
+                                        powerHasError = false
+                                    }
+
+                                    if (hasErr) {
+                                        errorMessage = AppStrings.get("fill_all_fields_error", selectedLanguage)
+                                        return@Button
+                                    }
+
+                                    errorMessage = null
+                                    currentStep = 3
+                                }
+                                3 -> {
+                                    // Validacija Koraka 3: Proizvođač, Količina i Cijena po paleti moraju biti popunjeni
+                                    val palletsVal = palletsText.replace(",", ".").toDoubleOrNull()
+                                    val priceVal = palletPriceText.replace(",", ".").toDoubleOrNull()
+                                    var hasErr = false
+
+                                    if (brandText.trim().isBlank()) {
+                                        brandHasError = true
+                                        hasErr = true
+                                    } else {
+                                        brandHasError = false
+                                    }
+
+                                    if (palletsText.trim().isBlank() || palletsVal == null || palletsVal <= 0.0) {
+                                        stockHasError = true
+                                        hasErr = true
+                                    } else {
+                                        stockHasError = false
+                                    }
+
+                                    if (palletPriceText.trim().isBlank() || priceVal == null || priceVal <= 0.0) {
+                                        priceHasError = true
+                                        hasErr = true
+                                    } else {
+                                        priceHasError = false
+                                    }
+
+                                    if (hasErr) {
+                                        errorMessage = AppStrings.get("fill_all_fields_error", selectedLanguage)
+                                        return@Button
+                                    }
+
+                                    if (isSubmitting) return@Button
+                                    isSubmitting = true
+                                    errorMessage = null
+
+                                    val finalArea = areaText.replace(",", ".").toDoubleOrNull() ?: 120.0
+                                    val finalPower = powerText.replace(",", ".").toDoubleOrNull() ?: 20.0
+                                    val finalPallets = palletsVal ?: 2.0
+                                    val finalPrice = priceVal ?: 525.0
+
+                                    onComplete(
+                                        finalArea,
+                                        finalPower,
+                                        selectedInsulation,
+                                        cityText.trim(),
+                                        brandText.trim(),
+                                        selectedClass,
+                                        finalPallets,
+                                        finalPrice,
+                                        selectedCurrency,
+                                        selectedLanguage
+                                    )
+                                }
                             }
                         },
                         enabled = !isSubmitting,
@@ -293,6 +379,37 @@ fun OnboardingScreen(
                 .padding(horizontal = 20.dp, vertical = 8.dp)
                 .padding(bottom = 24.dp)
         ) {
+            // Prikaz greške ako neko polje nije popunjeno
+            if (errorMessage != null) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 14.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = errorMessage ?: "",
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
             when (currentStep) {
                 // KORAK 1: Jezik, Valuta i Grad
                 1 -> {
@@ -309,7 +426,7 @@ fun OnboardingScreen(
                         modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
                     )
 
-                    // Jezik
+                    // Jezik (SR, BA, HR, ENG)
                     AppleCard(modifier = Modifier.fillMaxWidth()) {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -336,7 +453,7 @@ fun OnboardingScreen(
                                     ) {
                                         Text(
                                             text = label,
-                                            fontSize = 13.sp,
+                                            fontSize = 14.sp,
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                             color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
                                         )
@@ -348,7 +465,7 @@ fun OnboardingScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Valuta
+                    // Valuta (BAM, EUR, DIN)
                     AppleCard(modifier = Modifier.fillMaxWidth()) {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -387,7 +504,7 @@ fun OnboardingScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Grad
+                    // Grad / Klima zona -> Unesi grad (Klimatska zona)
                     AppleCard(modifier = Modifier.fillMaxWidth()) {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -398,8 +515,18 @@ fun OnboardingScreen(
 
                             OutlinedTextField(
                                 value = cityText,
-                                onValueChange = { cityText = it },
-                                label = { Text(AppStrings.get("city_name", selectedLanguage)) },
+                                onValueChange = {
+                                    cityText = it
+                                    if (it.trim().isNotBlank()) {
+                                        cityHasError = false
+                                        errorMessage = null
+                                    }
+                                },
+                                label = { Text(AppStrings.get("city", selectedLanguage)) },
+                                isError = cityHasError,
+                                supportingText = if (cityHasError) {
+                                    { Text(AppStrings.get("field_required", selectedLanguage), color = MaterialTheme.colorScheme.error) }
+                                } else null,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("onboarding_city_input"),
@@ -420,7 +547,11 @@ fun OnboardingScreen(
                                         color = if (isMatch) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(8.dp))
-                                            .clickable { cityText = city }
+                                            .clickable {
+                                                cityText = city
+                                                cityHasError = false
+                                                errorMessage = null
+                                            }
                                     ) {
                                         Text(
                                             text = city,
@@ -462,8 +593,18 @@ fun OnboardingScreen(
                             Row(modifier = Modifier.fillMaxWidth()) {
                                 OutlinedTextField(
                                     value = powerText,
-                                    onValueChange = { powerText = it },
+                                    onValueChange = {
+                                        powerText = it
+                                        if (it.trim().isNotBlank()) {
+                                            powerHasError = false
+                                            errorMessage = null
+                                        }
+                                    },
                                     label = { Text(AppStrings.get("boiler_power_kw", selectedLanguage)) },
+                                    isError = powerHasError,
+                                    supportingText = if (powerHasError) {
+                                        { Text(AppStrings.get("field_required", selectedLanguage), color = MaterialTheme.colorScheme.error) }
+                                    } else null,
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     modifier = Modifier
                                         .weight(1f)
@@ -474,8 +615,18 @@ fun OnboardingScreen(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 OutlinedTextField(
                                     value = areaText,
-                                    onValueChange = { areaText = it },
+                                    onValueChange = {
+                                        areaText = it
+                                        if (it.trim().isNotBlank()) {
+                                            areaHasError = false
+                                            errorMessage = null
+                                        }
+                                    },
                                     label = { Text(AppStrings.get("heating_area_m2", selectedLanguage)) },
+                                    isError = areaHasError,
+                                    supportingText = if (areaHasError) {
+                                        { Text(AppStrings.get("field_required", selectedLanguage), color = MaterialTheme.colorScheme.error) }
+                                    } else null,
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     modifier = Modifier
                                         .weight(1f)
@@ -542,7 +693,7 @@ fun OnboardingScreen(
                         modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
                     )
 
-                    // 1. Proizvođač
+                    // 1. Proizvođač -> Unesi proizvodjača peleta
                     AppleCard(modifier = Modifier.fillMaxWidth()) {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -553,8 +704,18 @@ fun OnboardingScreen(
 
                             OutlinedTextField(
                                 value = brandText,
-                                onValueChange = { brandText = it },
-                                label = { Text(AppStrings.get("supplier_placeholder", selectedLanguage)) },
+                                onValueChange = {
+                                    brandText = it
+                                    if (it.trim().isNotBlank()) {
+                                        brandHasError = false
+                                        errorMessage = null
+                                    }
+                                },
+                                label = { Text(AppStrings.get("brand", selectedLanguage)) },
+                                isError = brandHasError,
+                                supportingText = if (brandHasError) {
+                                    { Text(AppStrings.get("field_required", selectedLanguage), color = MaterialTheme.colorScheme.error) }
+                                } else null,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("onboarding_brand_input"),
@@ -562,7 +723,7 @@ fun OnboardingScreen(
                                 shape = RoundedCornerShape(14.dp)
                             )
 
-                            // Brzi odabir popularnih proizvođača
+                            // Brzi odabir popularnih proizvođača (bez Omo-Prom)
                             FlowRow(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -575,7 +736,11 @@ fun OnboardingScreen(
                                         color = if (isSel) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(8.dp))
-                                            .clickable { brandText = man }
+                                            .clickable {
+                                                brandText = man
+                                                brandHasError = false
+                                                errorMessage = null
+                                            }
                                     ) {
                                         Text(
                                             text = man,
@@ -631,10 +796,14 @@ fun OnboardingScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // 3. Dvostrani unos: Palete ili Vreće
+                    // 3. Dvostrani unos: Količina na stanju (unesi palete ili vreće) + Cijena po paleti
                     AppleCard(modifier = Modifier.fillMaxWidth()) {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text(AppStrings.get("stock_quantity_pallets_bags", selectedLanguage), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Text(
+                                text = AppStrings.get("stock_quantity_pallets_bags", selectedLanguage),
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp
+                            )
 
                             Row(modifier = Modifier.fillMaxWidth()) {
                                 // Unos paleta
@@ -642,6 +811,10 @@ fun OnboardingScreen(
                                     value = palletsText,
                                     onValueChange = { input ->
                                         palletsText = input
+                                        if (input.trim().isNotBlank()) {
+                                            stockHasError = false
+                                            errorMessage = null
+                                        }
                                         val p = input.replace(",", ".").toDoubleOrNull()
                                         if (p != null) {
                                             val calculatedBags = (p * 70).toInt()
@@ -649,6 +822,7 @@ fun OnboardingScreen(
                                         }
                                     },
                                     label = { Text(AppStrings.get("num_pallets", selectedLanguage)) },
+                                    isError = stockHasError,
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                     modifier = Modifier
                                         .weight(1f)
@@ -664,6 +838,10 @@ fun OnboardingScreen(
                                     value = bagsText,
                                     onValueChange = { input ->
                                         bagsText = input
+                                        if (input.trim().isNotBlank()) {
+                                            stockHasError = false
+                                            errorMessage = null
+                                        }
                                         val b = input.toIntOrNull()
                                         if (b != null) {
                                             val calculatedPallets = (b / 70.0 * 10).toInt() / 10.0
@@ -671,6 +849,7 @@ fun OnboardingScreen(
                                         }
                                     },
                                     label = { Text(AppStrings.get("exact_bags", selectedLanguage)) },
+                                    isError = stockHasError,
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     modifier = Modifier
                                         .weight(1f)
@@ -680,15 +859,33 @@ fun OnboardingScreen(
                                 )
                             }
 
-                            // 4. Cijena po paleti
-                            val palletPriceLabel = if (selectedLanguage.lowercase() == "en")
-                                "Price per pallet ( 70 bags - 1050kg ) ($selectedCurrency)"
-                            else
-                                "Cijena po paleti ( 70 vreća - 1050kg ) ($selectedCurrency)"
+                            if (stockHasError) {
+                                Text(
+                                    text = AppStrings.get("field_required", selectedLanguage),
+                                    color = MaterialTheme.colorScheme.error,
+                                    fontSize = 12.sp
+                                )
+                            }
+
+                            // 4. Cijena po paleti - ostavljena prazna sa obaveznim unosom i traženom napomenom
+                            val palletPriceNote = "${AppStrings.get("pallet_price_note", selectedLanguage)} ($selectedCurrency)"
                             OutlinedTextField(
                                 value = palletPriceText,
-                                onValueChange = { palletPriceText = it },
-                                label = { Text(palletPriceLabel) },
+                                onValueChange = {
+                                    palletPriceText = it
+                                    if (it.trim().isNotBlank()) {
+                                        priceHasError = false
+                                        errorMessage = null
+                                    }
+                                },
+                                label = { Text(palletPriceNote) },
+                                placeholder = { Text("Unesi cijenu po paleti (1 paleta = 70 vreća)") },
+                                isError = priceHasError,
+                                supportingText = if (priceHasError) {
+                                    { Text(AppStrings.get("field_required", selectedLanguage), color = MaterialTheme.colorScheme.error) }
+                                } else {
+                                    { Text(palletPriceNote, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                                },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 modifier = Modifier
                                     .fillMaxWidth()

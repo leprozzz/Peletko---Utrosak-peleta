@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,20 +23,22 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Grade
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Inventory
-import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Paid
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -54,6 +57,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -78,17 +82,24 @@ fun SettingsScreen(
     onSaveSettings: (AppSettings) -> Unit
 ) {
     val context = LocalContext.current
-    var areaText by remember { mutableStateOf(PelletCalculator.formatNumber(settings.heatingAreaM2, 0)) }
-    var powerText by remember { mutableStateOf(PelletCalculator.formatNumber(settings.boilerPowerKw, 0)) }
-    var selectedInsulation by remember { mutableStateOf(settings.insulationLevel) }
-    var cityText by remember { mutableStateOf(settings.city) }
-    var seasonText by remember { mutableStateOf(settings.currentSeason) }
 
-    // Nove postavke: Tema, Jezik, Valuta, Vremenska prognoza
-    var themeMode by remember { mutableStateOf(settings.themeMode) }
-    var language by remember { mutableStateOf(settings.language) }
-    var currency by remember { mutableStateOf(settings.currency) }
-    var autoFetchWeather by remember { mutableStateOf(settings.autoFetchWeather) }
+    // Podmeni: null = Glavni meni, "property_info" = "Informacije o objektu"
+    var currentSubMenu by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // Stanja za Informacije o objektu
+    var areaText by rememberSaveable { mutableStateOf(PelletCalculator.formatNumber(settings.heatingAreaM2, 0)) }
+    var powerText by rememberSaveable { mutableStateOf(PelletCalculator.formatNumber(settings.boilerPowerKw, 0)) }
+    var selectedInsulation by rememberSaveable { mutableStateOf(settings.insulationLevel) }
+    var cityText by rememberSaveable { mutableStateOf(settings.city) }
+    var brandText by rememberSaveable { mutableStateOf(settings.pelletBrand) }
+    var selectedPelletClass by rememberSaveable { mutableStateOf(settings.pelletClass) }
+    val lockedSeason = settings.currentSeason // Tekuća sezona je automatski deklarisana i zaključana
+
+    // Postavke: Tema, Jezik, Valuta, Vremenska prognoza
+    var themeMode by rememberSaveable { mutableStateOf(settings.themeMode) }
+    var language by rememberSaveable { mutableStateOf(settings.language) }
+    var currency by rememberSaveable { mutableStateOf(settings.currency) }
+    var autoFetchWeather by rememberSaveable { mutableStateOf(settings.autoFetchWeather) }
 
     val insulationOptions = listOf(
         "Bez izolacije",
@@ -97,17 +108,20 @@ fun SettingsScreen(
         "Odlična (15cm+)"
     )
 
+    val classOptions = listOf("A1", "A2", "Bez klase")
+
     val themeOptions = listOf(
         "SYSTEM" to AppStrings.get("theme_system", language),
         "LIGHT" to AppStrings.get("theme_light", language),
         "DARK" to AppStrings.get("theme_dark", language)
     )
 
+    // Redoslijed jezika prema zahtjevu: SR, BA, HR, ENG
     val languageOptions = listOf(
-        "bs" to "BiH",
-        "sr" to "Srp",
-        "hr" to "Hrv",
-        "en" to "Eng"
+        "sr" to "SR",
+        "bs" to "BA",
+        "hr" to "HR",
+        "en" to "ENG"
     )
 
     val currencyOptions = listOf(
@@ -116,6 +130,338 @@ fun SettingsScreen(
         "DIN" to "DIN (RSD)"
     )
 
+    fun doSave() {
+        val area = areaText.replace(",", ".").toDoubleOrNull() ?: settings.heatingAreaM2
+        val power = powerText.replace(",", ".").toDoubleOrNull() ?: settings.boilerPowerKw
+
+        val updated = settings.copy(
+            heatingAreaM2 = area,
+            boilerPowerKw = power,
+            insulationLevel = selectedInsulation,
+            city = cityText.ifBlank { settings.city },
+            pelletBrand = brandText.ifBlank { settings.pelletBrand },
+            pelletClass = selectedPelletClass,
+            currentSeason = lockedSeason,
+            themeMode = themeMode,
+            language = language,
+            currency = currency,
+            autoFetchWeather = autoFetchWeather
+        )
+        onSaveSettings(updated)
+    }
+
+    // --- PODMENI: INFORMACIJE O OBJEKTU ---
+    if (currentSubMenu == "property_info") {
+        BackHandler {
+            currentSubMenu = null
+        }
+
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = AppStrings.get("property_info", language),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(
+                            onClick = { currentSubMenu = null },
+                            modifier = Modifier.testTag("property_info_back_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = AppStrings.get("back", language)
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background
+                    )
+                )
+            },
+            containerColor = MaterialTheme.colorScheme.background
+        ) { padding ->
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // 1. Snaga kotla i grejna površina
+                item {
+                    AppleCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Speed,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = AppStrings.get("settings_sec3", language),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
+                                )
+                            }
+
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                OutlinedTextField(
+                                    value = areaText,
+                                    onValueChange = { areaText = it },
+                                    label = { Text(AppStrings.get("heating_area", language)) },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("settings_area_input"),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                OutlinedTextField(
+                                    value = powerText,
+                                    onValueChange = { powerText = it },
+                                    label = { Text(AppStrings.get("boiler_power", language)) },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("settings_power_input"),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(14.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // 2. Izolacija objekta
+                item {
+                    AppleCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(
+                                text = AppStrings.get("insulation", language),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp
+                            )
+
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                insulationOptions.forEach { opt ->
+                                    val selected = (selectedInsulation == opt)
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(
+                                                if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                                                else MaterialTheme.colorScheme.surfaceVariant
+                                            )
+                                            .clickable { selectedInsulation = opt }
+                                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .clip(CircleShape)
+                                                .border(2.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline, CircleShape)
+                                                .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (selected) {
+                                                Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(14.dp))
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Text(text = PelletCalculator.getInsulationLabel(opt, language), fontSize = 13.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 3. Lokacija i pelet
+                item {
+                    AppleCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.LocationOn,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = AppStrings.get("settings_sec2", language),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
+                                )
+                            }
+
+                            // Grad (Klimatska zona)
+                            OutlinedTextField(
+                                value = cityText,
+                                onValueChange = { cityText = it },
+                                label = { Text(AppStrings.get("city", language)) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                shape = RoundedCornerShape(14.dp)
+                            )
+
+                            // Proizvođač peleta
+                            OutlinedTextField(
+                                value = brandText,
+                                onValueChange = { brandText = it },
+                                label = { Text(AppStrings.get("brand", language)) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                shape = RoundedCornerShape(14.dp)
+                            )
+
+                            // Klasa peleta
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    text = AppStrings.get("pellet_class", language),
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    classOptions.forEach { opt ->
+                                        val isSelected = (selectedPelletClass == opt)
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
+                                                .border(1.dp, if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(10.dp))
+                                                .clickable { selectedPelletClass = opt }
+                                                .padding(vertical = 10.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = opt,
+                                                fontSize = 13.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 4. Tekuća sezona - ZAKLJUČANO PREMA ZAHTJEVU
+                item {
+                    AppleCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.outline,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = AppStrings.get("current_season_label", language),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant
+                                ) {
+                                    Text(
+                                        text = "Zaključano",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.outline,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                    )
+                                }
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = lockedSeason,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = "• ${AppStrings.get("season_locked_hint", language)}",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Tipka Sačuvaj izmjene objekta
+                item {
+                    Button(
+                        onClick = {
+                            doSave()
+                            currentSubMenu = null
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(54.dp)
+                            .testTag("property_info_save_button"),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(imageVector = Icons.Default.Save, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = AppStrings.get("save", language),
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+            }
+        }
+        return
+    }
+
+    // --- GLAVNI MENI PODEŠAVANJA ---
     Scaffold(
         topBar = {
             TopAppBar(
@@ -151,7 +497,7 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 1. TEMA, JEZIK I VALUTA (NOVO PREMA ZAHTJEVU)
+            // 1. TEMA, JEZIK I VALUTA
             item {
                 AppleCard(modifier = Modifier.fillMaxWidth()) {
                     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -216,7 +562,7 @@ fun SettingsScreen(
                             }
                         }
 
-                        // Jezik (Srpski, Hrvatski, Bosanski, Engleski)
+                        // Jezik (Redoslijed: SR, BA, HR, ENG)
                         Column {
                             Text(
                                 text = AppStrings.get("language", language),
@@ -250,7 +596,7 @@ fun SettingsScreen(
                                     ) {
                                         Text(
                                             text = label,
-                                            fontSize = 13.sp,
+                                            fontSize = 14.sp,
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                             color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
                                         )
@@ -259,7 +605,7 @@ fun SettingsScreen(
                             }
                         }
 
-                        // Valuta (EUR, BAM, DIN)
+                        // Valuta (BAM, EUR, DIN)
                         Column {
                             Text(
                                 text = AppStrings.get("currency", language),
@@ -347,135 +693,62 @@ fun SettingsScreen(
                 }
             }
 
-            // 3. Objekat i peć
+            // 3. PODMENI: "INFORMACIJE O OBJEKTU" (PREMA ZAHTJEVU)
             item {
-                AppleCard(modifier = Modifier.fillMaxWidth()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Home,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = AppStrings.get("settings_sec3", language),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
-                            )
-                        }
-
-                        Row(modifier = Modifier.fillMaxWidth()) {
-                            OutlinedTextField(
-                                value = areaText,
-                                onValueChange = { areaText = it },
-                                label = { Text(AppStrings.get("heating_area", language)) },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                AppleCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { currentSubMenu = "property_info" }
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("settings_area_input"),
-                                singleLine = true,
-                                shape = RoundedCornerShape(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            OutlinedTextField(
-                                value = powerText,
-                                onValueChange = { powerText = it },
-                                label = { Text(AppStrings.get("boiler_power", language)) },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("settings_power_input"),
-                                singleLine = true,
-                                shape = RoundedCornerShape(14.dp)
-                            )
-                        }
-
-                        Text(
-                            text = AppStrings.get("insulation", language),
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 14.sp
-                        )
-
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            insulationOptions.forEach { opt ->
-                                val selected = (selectedInsulation == opt)
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(
-                                            if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                                            else MaterialTheme.colorScheme.surfaceVariant
-                                        )
-                                        .clickable { selectedInsulation = opt }
-                                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(18.dp)
-                                            .clip(CircleShape)
-                                            .border(2.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline, CircleShape)
-                                            .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        if (selected) {
-                                            Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(12.dp))
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Text(text = PelletCalculator.getInsulationLabel(opt, language), fontSize = 13.sp)
-                                }
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primaryContainer),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Home,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = AppStrings.get("property_info", language),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
+                                )
+                                Text(
+                                    text = AppStrings.get("property_info_sub", language),
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
-                    }
-                }
-            }
 
-            // 4. Lokacija i pelet
-            item {
-                AppleCard(modifier = Modifier.fillMaxWidth()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.LocationOn,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = AppStrings.get("settings_sec2", language),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
-                            )
-                        }
-
-                        OutlinedTextField(
-                            value = cityText,
-                            onValueChange = { cityText = it },
-                            label = { Text(AppStrings.get("city", language)) },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            shape = RoundedCornerShape(14.dp)
-                        )
-
-                        val seasonHint = if (language.lowercase() == "en") "Current season (e.g. 2024/2025)" else "Tekuća sezona (npr. 2024/2025)"
-                        OutlinedTextField(
-                            value = seasonText,
-                            onValueChange = { seasonText = it },
-                            label = { Text(seasonHint) },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            shape = RoundedCornerShape(14.dp)
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
             }
 
-            // O aplikaciji / About App (Developer: ProleApps)
+            // 4. O APLIKACIJI / ABOUT APP (Developer: ProleApps)
             item {
                 AppleCard(modifier = Modifier.fillMaxWidth()) {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -615,23 +888,7 @@ fun SettingsScreen(
             // Tipka Sačuvaj
             item {
                 Button(
-                    onClick = {
-                        val area = areaText.replace(",", ".").toDoubleOrNull() ?: settings.heatingAreaM2
-                        val power = powerText.replace(",", ".").toDoubleOrNull() ?: settings.boilerPowerKw
-
-                        val updated = settings.copy(
-                            heatingAreaM2 = area,
-                            boilerPowerKw = power,
-                            insulationLevel = selectedInsulation,
-                            city = cityText.ifBlank { settings.city },
-                            currentSeason = seasonText.ifBlank { settings.currentSeason },
-                            themeMode = themeMode,
-                            language = language,
-                            currency = currency,
-                            autoFetchWeather = autoFetchWeather
-                        )
-                        onSaveSettings(updated)
-                    },
+                    onClick = { doSave() },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(54.dp)
