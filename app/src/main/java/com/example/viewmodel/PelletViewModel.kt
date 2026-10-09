@@ -512,8 +512,8 @@ class PelletViewModel(
         currency: String = "BAM",
         language: String = "sr",
         themeMode: String = "SYSTEM"
-    ) {
-        if (isCompletingOnboarding) return
+    ): kotlinx.coroutines.Job {
+        if (isCompletingOnboarding) return kotlinx.coroutines.Job().apply { complete() }
         isCompletingOnboarding = true
 
         val today = PelletCalculator.getTodayISO()
@@ -537,7 +537,7 @@ class PelletViewModel(
         // Odmah ažuriraj u memoriji da interfejs momentalno pređe na glavni ekran
         _overrideSettings.value = newSettings
 
-        viewModelScope.launch {
+        return viewModelScope.launch {
             try {
                 repository.updateSettings(newSettings)
 

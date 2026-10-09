@@ -286,4 +286,45 @@ class ExampleUnitTest {
         assertEquals("204", PelletCalculator.formatBagsCount(204.0))
         assertEquals("100", PelletCalculator.formatBagsCount(100.0))
     }
+
+    @Test
+    fun testOnboardingDefaultsAndStrings() {
+        val appStrings = com.example.util.AppStrings
+        val langs = listOf("sr", "bs", "hr", "en")
+        for (l in langs) {
+            // Provjeri da ključevi za onboarding postoje i nisu prazni
+            val step2Sub = appStrings.get("onboarding_step2_sub", l)
+            assertTrue(step2Sub.isNotBlank())
+            if (l != "en") {
+                assertTrue(step2Sub.contains("za preciznu analizu potrošnje"))
+            }
+
+            val cityTitle = appStrings.get("city", l)
+            assertTrue(cityTitle.isNotBlank())
+            if (l != "en") {
+                assertEquals("Unesi grad (Klimatska zona)", cityTitle)
+            }
+
+            val brandTitle = appStrings.get("brand", l)
+            assertTrue(brandTitle.isNotBlank())
+            if (l != "en") {
+                assertTrue(brandTitle.startsWith("Unesi proiz"))
+            }
+
+            val stockTitle = appStrings.get("stock_quantity_pallets_bags", l)
+            assertTrue(stockTitle.isNotBlank())
+            if (l != "en") {
+                assertEquals("Količina na stanju (unesi palete ili vreće)", stockTitle)
+            }
+
+            val palletNote = appStrings.get("pallet_price_note", l)
+            assertTrue(palletNote.isNotBlank())
+            if (l != "en") {
+                assertTrue(palletNote.contains("1 paleta = 70 vreća"))
+            }
+
+            val fillError = appStrings.get("fill_all_fields_error", l)
+            assertTrue(fillError.isNotBlank())
+        }
+    }
 }
