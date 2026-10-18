@@ -157,7 +157,8 @@ object AppStrings {
         "property_info" to "Informacije o objektu",
         "property_info_sub" to "Snaga kotla, grejna površina, izolacija, grad i pelet",
         "season_locked_hint" to "Tekuća sezona je automatski deklarisana (zaključano)",
-        "forecast_log_prompt" to "Unesi potrošnju za proračun"
+        "forecast_log_prompt" to "Unesi potrošnju za proračun",
+        "future_date_forbidden" to "Nije moguće unositi potrošnju peleta za datume u budućnosti!"
     )
 
     private val sr = mapOf(
@@ -305,7 +306,8 @@ object AppStrings {
         "property_info" to "Informacije o objektu",
         "property_info_sub" to "Snaga kotla, grejna površina, izolacija, grad i pelet",
         "season_locked_hint" to "Tekuća sezona je automatski deklarisana (zaključano)",
-        "forecast_log_prompt" to "Unesi potrošnju za proračun"
+        "forecast_log_prompt" to "Unesi potrošnju za proračun",
+        "future_date_forbidden" to "Nije moguće unositi potrošnju peleta za datume u budućnosti!"
     )
 
     private val hr = mapOf(
@@ -453,7 +455,8 @@ object AppStrings {
         "property_info" to "Informacije o objektu",
         "property_info_sub" to "Snaga peći, grijana površina, izolacija, grad i pelet",
         "season_locked_hint" to "Tekuća sezona je automatski deklarirana (zaključano)",
-        "forecast_log_prompt" to "Unesi potrošnju za proračun"
+        "forecast_log_prompt" to "Unesi potrošnju za proračun",
+        "future_date_forbidden" to "Nije moguće unositi potrošnju peleta za datume u budućnosti!"
     )
 
     private val en = mapOf(
@@ -567,7 +570,7 @@ object AppStrings {
         "about_app" to "About App",
         "developer" to "Developer",
         "developer_name" to "ProleApps",
-        "app_version" to "Version 1.0.3",
+        "app_version" to "Version 1.0.4",
         "privacy_policy" to "Privacy Policy",
         "privacy_policy_desc" to "Learn how your data is protected (leprozzz.github.io)",
         "app_description" to "Simple and accurate tracking of pellet consumption, warehouse inventory, and heating costs with automated weather forecasting.",
@@ -601,6 +604,7 @@ object AppStrings {
         "property_info" to "Property information",
         "property_info_sub" to "Boiler power, heated area, insulation, city & pellet",
         "season_locked_hint" to "Current season is automatically declared (locked)",
-        "forecast_log_prompt" to "Log consumption for calculation"
+        "forecast_log_prompt" to "Log consumption for calculation",
+        "future_date_forbidden" to "Cannot enter pellet consumption for future dates!"
     )
 }

@@ -22,6 +22,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
@@ -58,6 +59,8 @@ enum class Screen {
 }
 
 class MainActivity : ComponentActivity() {
+    private var viewModelRef: PelletViewModel? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -68,6 +71,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val pelletViewModel: PelletViewModel = viewModel(factory = factory)
+            viewModelRef = pelletViewModel
             val settings by pelletViewModel.settings.collectAsStateWithLifecycle()
 
             // Izbor teme: Sistem / Svijetla / Tamna
@@ -81,6 +85,11 @@ class MainActivity : ComponentActivity() {
                 PelletApp(viewModel = pelletViewModel, isDarkTheme = isDarkTheme)
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        viewModelRef?.refreshTodayDate()
     }
 }
 
@@ -97,8 +106,23 @@ fun PelletApp(viewModel: PelletViewModel, isDarkTheme: Boolean) {
     val metrics by viewModel.industryMetrics.collectAsStateWithLifecycle()
     val todayEntry by viewModel.todayEntry.collectAsStateWithLifecycle()
     val todayWeather by viewModel.todayWeather.collectAsStateWithLifecycle()
+    val currentTodayISO by viewModel.currentTodayISO.collectAsStateWithLifecycle()
     val availableSeasons by viewModel.availableSeasons.collectAsStateWithLifecycle()
     val selectedSeason by viewModel.selectedSeasonFilter.collectAsStateWithLifecycle()
+
+    // Osvježi današnji datum kada se aplikacija vrati iz pozadine (npr. sutradan)
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshTodayDate()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     // Ako je prvo pokretanje, prikaži puni ekran za onboarding (nema skrivenih tipki ili problema sa scrollom)
     if (!settings.isOnboarded) {
@@ -258,7 +282,7 @@ fun PelletApp(viewModel: PelletViewModel, isDarkTheme: Boolean) {
     if (showDailyEntrySheet) {
         DailyEntrySheet(
             existingEntry = entryToEdit,
-            targetDateISO = entryToEdit?.dateISO ?: PelletCalculator.getTodayISO(),
+            targetDateISO = entryToEdit?.dateISO ?: currentTodayISO,
             pricePerKgKM = viewModel.getWeightedPricePerKg(),
             boilerPowerKw = settings.boilerPowerKw,
             currency = settings.currency,

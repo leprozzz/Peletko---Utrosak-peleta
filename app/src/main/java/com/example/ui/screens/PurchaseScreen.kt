@@ -11,14 +11,17 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -435,6 +438,8 @@ fun PurchaseBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .imePadding()
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -464,15 +469,19 @@ fun PurchaseBottomSheet(
                         .clip(RoundedCornerShape(12.dp))
                         .clickable {
                             val cal = Calendar.getInstance()
-                            DatePickerDialog(
+                            val datePickerDialog = DatePickerDialog(
                                 context,
                                 { _, y, m, d ->
-                                    dateISO = String.format("%04d-%02d-%02d", y, m + 1, d)
+                                    val formatted = String.format("%04d-%02d-%02d", y, m + 1, d)
+                                    val today = PelletCalculator.getTodayISO()
+                                    dateISO = if (formatted > today) today else formatted
                                 },
                                 cal.get(Calendar.YEAR),
                                 cal.get(Calendar.MONTH),
                                 cal.get(Calendar.DAY_OF_MONTH)
-                            ).show()
+                            )
+                            datePickerDialog.datePicker.maxDate = System.currentTimeMillis()
+                            datePickerDialog.show()
                         }
                 ) {
                     Row(

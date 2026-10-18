@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import android.app.DatePickerDialog
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -11,12 +12,18 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
@@ -46,6 +53,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,8 +72,9 @@ import com.example.ui.components.QuickNumberStepper
 import com.example.util.AppStrings
 import com.example.util.PelletCalculator
 import java.util.Calendar
+import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun DailyEntrySheet(
     existingEntry: PelletEntry? = null,
@@ -82,9 +91,16 @@ fun DailyEntrySheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val scrollState = rememberScrollState()
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
 
     val maxBags = PelletCalculator.getMaxDailyBagsForBoiler(boilerPowerKw)
-    var selectedDateISO by remember { mutableStateOf(existingEntry?.dateISO ?: targetDateISO) }
+    val todayISO = PelletCalculator.getTodayISO()
+    var selectedDateISO by remember {
+        val initial = existingEntry?.dateISO ?: targetDateISO
+        mutableStateOf(if (initial > todayISO) todayISO else initial)
+    }
     var bags by remember { mutableDoubleStateOf((existingEntry?.bags ?: 1.0).coerceIn(1.0, maxBags.toDouble())) }
 
     // Ako postoji keširana temperatura za danas i ovo je novi unos
@@ -173,6 +189,8 @@ fun DailyEntrySheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(scrollState)
+                .imePadding()
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -225,17 +243,22 @@ fun DailyEntrySheet(
                             }
                         } catch (_: Exception) {}
 
-                        DatePickerDialog(
+                        val datePickerDialog = DatePickerDialog(
                             context,
                             { _, y, m, d ->
                                 val formatted = String.format("%04d-%02d-%02d", y, m + 1, d)
-                                selectedDateISO = formatted
-                                triggerFetchWeather(formatted)
+                                val today = PelletCalculator.getTodayISO()
+                                val finalDate = if (formatted > today) today else formatted
+                                selectedDateISO = finalDate
+                                triggerFetchWeather(finalDate)
                             },
                             cal.get(Calendar.YEAR),
                             cal.get(Calendar.MONTH),
                             cal.get(Calendar.DAY_OF_MONTH)
-                        ).show()
+                        )
+                        // Zabraniti odabir dana u budućnosti
+                        datePickerDialog.datePicker.maxDate = System.currentTimeMillis()
+                        datePickerDialog.show()
                     }
                     .testTag("entry_date_picker_button")
             ) {
@@ -397,7 +420,7 @@ fun DailyEntrySheet(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Bilješka
+            // Bilješka (automatski scroll na fokus kada se otvori tastatura)
             OutlinedTextField(
                 value = notesText,
                 onValueChange = { notesText = it },
@@ -405,6 +428,16 @@ fun DailyEntrySheet(
                 placeholder = { Text(AppStrings.get("notes_placeholder", language)) },
                 modifier = Modifier
                     .fillMaxWidth()
+                    .bringIntoViewRequester(bringIntoViewRequester)
+                    .onFocusEvent { focusState ->
+                        if (focusState.isFocused) {
+                            coroutineScope.launch {
+                                kotlinx.coroutines.delay(220)
+                                bringIntoViewRequester.bringIntoView()
+                                scrollState.animateScrollTo(scrollState.maxValue)
+                            }
+                        }
+                    }
                     .testTag("entry_notes_input"),
                 singleLine = true,
                 shape = RoundedCornerShape(14.dp),
@@ -420,6 +453,8 @@ fun DailyEntrySheet(
             Button(
                 onClick = {
                     if (bags <= 0.0) return@Button
+                    val today = PelletCalculator.getTodayISO()
+                    if (selectedDateISO > today) return@Button
                     val temp = tempText.replace("°C", "").replace(",", ".").trim().toDoubleOrNull()
                     onSave(selectedDateISO, bags, temp, notesText, t08Val, t13Val, t20Val, false)
                 },

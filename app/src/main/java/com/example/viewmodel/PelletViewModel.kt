@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -97,10 +98,14 @@ class PelletViewModel(
         PelletCalculator.computeMetrics(emptyList(), AppSettings())
     )
 
-    // Današnji unos ako postoji
+    // Današnji datum u ISO formatu - podržava dinamičko osvježavanje kad se aplikacija vrati iz pozadine
+    private val _currentTodayISO = MutableStateFlow(PelletCalculator.getTodayISO())
+    val currentTodayISO: StateFlow<String> = _currentTodayISO.asStateFlow()
+
+    // Današnji unos ako postoji (automatski se re-evaluira kad se promijeni dan)
     val todayEntry: StateFlow<PelletEntry?> = combine(
         allEntries,
-        MutableStateFlow(PelletCalculator.getTodayISO())
+        _currentTodayISO
     ) { entries, today ->
         entries.firstOrNull { it.dateISO == today }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
@@ -110,8 +115,27 @@ class PelletViewModel(
 
     init {
         viewModelScope.launch {
-            // Automatski povuci i osvježi temperature za sve dane čim se aplikacija pokrene (ekvivalent klika na dugme gore desno)
+            // Automatski povuci i osvježi temperature za sve dane čim se aplikacija pokrene
             syncWeatherHistory(notify = false, forceAll = true)
+        }
+    }
+
+    /**
+     * Osvježava današnji datum kada se aplikacija vrati iz pozadine (ON_RESUME).
+     * Ako je nastupio novi dan, ažurira _currentTodayISO, što automatski osvježava
+     * današnji unos (todayEntry) i po potrebi preuzima novu temperaturu.
+     */
+    fun refreshTodayDate() {
+        val newToday = PelletCalculator.getTodayISO()
+        if (_currentTodayISO.value != newToday) {
+            _currentTodayISO.value = newToday
+            viewModelScope.launch(Dispatchers.IO) {
+                syncTodayWeather()
+            }
+        } else if (todayWeather.value == null) {
+            viewModelScope.launch(Dispatchers.IO) {
+                syncTodayWeather()
+            }
         }
     }
 
@@ -283,6 +307,20 @@ class PelletViewModel(
         onRequireNegativeConfirmation: ((remainingKgAfter: Double) -> Unit)? = null,
         onComplete: (isUpdate: Boolean) -> Unit
     ) {
+        val today = PelletCalculator.getTodayISO()
+        if (dateISO > today) {
+            val lang = settings.value.language
+            viewModelScope.launch {
+                _notification.emit(
+                    UiNotification(
+                        message = AppStrings.get("future_date_forbidden", lang),
+                        isWarning = true
+                    )
+                )
+            }
+            return
+        }
+
         viewModelScope.launch {
             val existing = repository.getEntryByDateOnce(dateISO)
             val oldKg = existing?.kg ?: 0.0
@@ -312,6 +350,20 @@ class PelletViewModel(
         t20: Double? = null,
         onComplete: (isUpdate: Boolean) -> Unit
     ) {
+        val today = PelletCalculator.getTodayISO()
+        if (dateISO > today) {
+            val lang = settings.value.language
+            viewModelScope.launch {
+                _notification.emit(
+                    UiNotification(
+                        message = AppStrings.get("future_date_forbidden", lang),
+                        isWarning = true
+                    )
+                )
+            }
+            return
+        }
+
         viewModelScope.launch {
             val existing = repository.getEntryByDateOnce(dateISO)
             val addedKg = PelletCalculator.computeKgFromBags(bags)
