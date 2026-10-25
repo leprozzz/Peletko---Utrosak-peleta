@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -34,6 +35,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Mail
 import androidx.compose.material.icons.filled.Paid
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PrivacyTip
@@ -86,13 +88,11 @@ fun SettingsScreen(
     // Podmeni: null = Glavni meni, "property_info" = "Informacije o objektu"
     var currentSubMenu by rememberSaveable { mutableStateOf<String?>(null) }
 
-    // Stanja za Informacije o objektu
+    // Stanja za Informacije o objektu (pelet se uređuje isključivo u Magacin/Kupovina)
     var areaText by rememberSaveable { mutableStateOf(PelletCalculator.formatNumber(settings.heatingAreaM2, 0)) }
     var powerText by rememberSaveable { mutableStateOf(PelletCalculator.formatNumber(settings.boilerPowerKw, 0)) }
     var selectedInsulation by rememberSaveable { mutableStateOf(settings.insulationLevel) }
     var cityText by rememberSaveable { mutableStateOf(settings.city) }
-    var brandText by rememberSaveable { mutableStateOf(settings.pelletBrand) }
-    var selectedPelletClass by rememberSaveable { mutableStateOf(settings.pelletClass) }
     val lockedSeason = settings.currentSeason // Tekuća sezona je automatski deklarisana i zaključana
 
     // Postavke: Tema, Jezik, Valuta, Vremenska prognoza
@@ -107,8 +107,6 @@ fun SettingsScreen(
         "Dobra (10cm)",
         "Odlična (15cm+)"
     )
-
-    val classOptions = listOf("A1", "A2", "Bez klase")
 
     val themeOptions = listOf(
         "SYSTEM" to AppStrings.get("theme_system", language),
@@ -139,8 +137,8 @@ fun SettingsScreen(
             boilerPowerKw = power,
             insulationLevel = selectedInsulation,
             city = cityText.ifBlank { settings.city },
-            pelletBrand = brandText.ifBlank { settings.pelletBrand },
-            pelletClass = selectedPelletClass,
+            pelletBrand = settings.pelletBrand,
+            pelletClass = settings.pelletClass,
             currentSeason = lockedSeason,
             themeMode = themeMode,
             language = language,
@@ -188,6 +186,7 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
+                    .imePadding()
                     .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -285,7 +284,7 @@ fun SettingsScreen(
                     }
                 }
 
-                // 3. Lokacija i pelet
+                // 3. Lokacija (Klimatska zona)
                 item {
                     AppleCard(modifier = Modifier.fillMaxWidth()) {
                         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -309,55 +308,12 @@ fun SettingsScreen(
                                 value = cityText,
                                 onValueChange = { cityText = it },
                                 label = { Text(AppStrings.get("city", language)) },
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("settings_city_input"),
                                 singleLine = true,
                                 shape = RoundedCornerShape(14.dp)
                             )
-
-                            // Proizvođač peleta
-                            OutlinedTextField(
-                                value = brandText,
-                                onValueChange = { brandText = it },
-                                label = { Text(AppStrings.get("brand", language)) },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true,
-                                shape = RoundedCornerShape(14.dp)
-                            )
-
-                            // Klasa peleta
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text(
-                                    text = AppStrings.get("pellet_class", language),
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    classOptions.forEach { opt ->
-                                        val isSelected = (selectedPelletClass == opt)
-                                        Box(
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .clip(RoundedCornerShape(10.dp))
-                                                .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
-                                                .border(1.dp, if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(10.dp))
-                                                .clickable { selectedPelletClass = opt }
-                                                .padding(vertical = 10.dp),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                text = opt,
-                                                fontSize = 13.sp,
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
-                                    }
-                                }
-                            }
                         }
                     }
                 }
@@ -494,6 +450,7 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .imePadding()
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -826,6 +783,74 @@ fun SettingsScreen(
                                     color = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
                             }
+                        }
+
+                        // Prijavi problem / Report a problem (otvara email klijent prema proleapps@gmail.com)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                .clickable {
+                                    try {
+                                        val intent = Intent(Intent.ACTION_SENDTO).apply {
+                                            data = Uri.parse("mailto:proleapps@gmail.com")
+                                            putExtra(Intent.EXTRA_SUBJECT, "Peletko - Prijava problema (v${com.example.BuildConfig.VERSION_NAME})")
+                                            putExtra(
+                                                Intent.EXTRA_TEXT,
+                                                "Pozdrav,\n\nOpis problema ili prijedlog:\n\n---\nModel uređaja: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}\nAndroid verzija: ${android.os.Build.VERSION.RELEASE}\nVerzija aplikacije: ${com.example.BuildConfig.VERSION_NAME}"
+                                            )
+                                        }
+                                        context.startActivity(Intent.createChooser(intent, AppStrings.get("report_problem", language)))
+                                    } catch (_: Exception) {
+                                        try {
+                                            val fallbackIntent = Intent(Intent.ACTION_VIEW, Uri.parse("mailto:proleapps@gmail.com?subject=Peletko%20-%20Prijava%20problema"))
+                                            context.startActivity(fallbackIntent)
+                                        } catch (_: Exception) {}
+                                    }
+                                }
+                                .padding(horizontal = 14.dp, vertical = 12.dp)
+                                .testTag("settings_report_problem_button"),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Mail,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = AppStrings.get("report_problem", language),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "proleapps@gmail.com",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
 
                         // Politika privatnosti / Privacy Policy

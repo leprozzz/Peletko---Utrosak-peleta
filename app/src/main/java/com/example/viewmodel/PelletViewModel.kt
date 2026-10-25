@@ -473,10 +473,13 @@ class PelletViewModel(
             )
             repository.insertPurchase(purchase)
 
-            // Tekuća sezona deklarisana prema godini unosa (npr. 2026 -> 2026/2027)
+            // Tekuća sezona deklarisana prema godini unosa (npr. 2026 -> 2026/2027) i ažuriranje brenda
             val declaredSeason = PelletCalculator.computeSeason(dateISO)
             val currentSett = repository.getSettingsOnce() ?: settings.value
-            val updatedSettings = currentSett.copy(currentSeason = declaredSeason)
+            val updatedSettings = currentSett.copy(
+                currentSeason = declaredSeason,
+                pelletBrand = if (supplier.isNotBlank()) supplier else currentSett.pelletBrand
+            )
             repository.updateSettings(updatedSettings)
 
             val lang = settings.value.language
@@ -534,6 +537,11 @@ class PelletViewModel(
                 notes = notes
             )
             repository.updatePurchase(purchase)
+
+            if (supplier.isNotBlank()) {
+                val currentSett = repository.getSettingsOnce() ?: settings.value
+                repository.updateSettings(currentSett.copy(pelletBrand = supplier))
+            }
 
             val lang = settings.value.language
             _notification.emit(UiNotification(AppStrings.get("purchase_updated", lang), isWarning = false))

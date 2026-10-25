@@ -243,7 +243,7 @@ fun PelletApp(viewModel: PelletViewModel, isDarkTheme: Boolean) {
                     PurchaseScreen(
                         purchases = purchases,
                         inventory = inventory,
-                        defaultSupplier = settings.pelletBrand,
+                        defaultSupplier = purchases.firstOrNull { it.supplier.isNotBlank() }?.supplier ?: settings.pelletBrand,
                         currency = settings.currency,
                         language = settings.language,
                         onBack = { currentScreen = Screen.HOME },

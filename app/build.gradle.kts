@@ -16,8 +16,8 @@ android {
     applicationId = "com.andrejprole.utrosakpeleta"
     minSdk = 24
     targetSdk = 36
-    versionCode = 5
-    versionName = "1.0.4"
+    versionCode = 7
+    versionName = "1.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
