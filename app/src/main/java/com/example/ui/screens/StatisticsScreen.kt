@@ -285,12 +285,13 @@ fun StatisticsScreen(
                             modifier = Modifier.weight(1f)
                         )
 
-                        // 2. kg po kW peći
+                        // 2. Dnevni prosjek vreća (od prvog do zadnjeg unosa u sezoni)
+                        val bagsPerDayUnit = AppStrings.get("unit_per_day_short", lang)
                         IndustryMetricBox(
-                            title = AppStrings.get("kg_per_kw", lang),
-                            value = PelletCalculator.formatNumber(metrics.kgPerKwBoiler, 1),
-                            unit = "kg/kW",
-                            subtitle = AppStrings.get("boiler_load", lang),
+                            title = AppStrings.get("daily_average", lang),
+                            value = PelletCalculator.formatNumber(metrics.avgBagsRecordedPerDay, 1),
+                            unit = bagsPerDayUnit,
+                            subtitle = AppStrings.get("season_first_to_last_hint", lang),
                             icon = Icons.Default.Bolt,
                             iconColor = Color(0xFFF59E0B),
                             modifier = Modifier.weight(1f)
@@ -317,7 +318,7 @@ fun StatisticsScreen(
                             title = "$currSymbol / $dayUnit",
                             value = PelletCalculator.formatNumber(metrics.kmPerDay, 2),
                             unit = "$currSymbol/$dayUnit",
-                            subtitle = AppStrings.get("daily_average", lang),
+                            subtitle = AppStrings.get("daily_cost_subtitle", lang),
                             icon = Icons.Default.CalendarToday,
                             iconColor = Color(0xFF3B82F6),
                             modifier = Modifier.weight(1f)
@@ -474,6 +475,13 @@ fun MonthlyConsumptionCard(entries: List<PelletEntry>, currency: String = "BAM",
                     val totalCost = monthEntries.sumOf { it.costKM }
                     val daysCount = monthEntries.size
 
+                    // Mjesečni prosjek od prvog do zadnjeg zabilježenog dana sipanja u tom mjesecu
+                    val sortedDates = monthEntries.map { it.dateISO }.sorted()
+                    val firstDate = sortedDates.first()
+                    val lastDate = sortedDates.last()
+                    val daysInMonthRange = (PelletCalculator.calendarDaysBetween(firstDate, lastDate) + 1L).toInt().coerceAtLeast(1)
+                    val monthlyDailyAvg = totalBags / daysInMonthRange.toDouble()
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -499,12 +507,23 @@ fun MonthlyConsumptionCard(entries: List<PelletEntry>, currency: String = "BAM",
                         }
 
                         Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                text = PelletCalculator.formatBagsWithUnit(totalBags, language),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
+                            val avgLabel = AppStrings.get("avg_short", language)
+                            val avgVal = PelletCalculator.formatNumber(monthlyDailyAvg, 1)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = PelletCalculator.formatBagsWithUnit(totalBags, language),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "($avgLabel $avgVal)",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
+                                )
+                            }
                             Text(
                                 text = PelletCalculator.formatCurrency(totalCost, currency),
                                 fontSize = 12.sp,

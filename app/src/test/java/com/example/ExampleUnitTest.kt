@@ -327,4 +327,121 @@ class ExampleUnitTest {
             assertTrue(fillError.isNotBlank())
         }
     }
+
+    @Test
+    fun testHeatingCycleTemperatureCorrelation() {
+        // Test scenarij iz realnog života:
+        // 1. Topli period (12.10. - 20.10., 8 dana): ubačeno 5 vreća, temp > 10°C
+        //    Dnevna potrošnja: 5 / 8 = 0.625 vreća/dan
+        // 2. Hladni period (20.10. - 22.10., 2 dana): ubačeno 5 vreća, temp < 0°C
+        //    Dnevna potrošnja: 5 / 2 = 2.5 vreća/dan
+        val entry1 = PelletEntry(
+            id = 1,
+            dateISO = "2025-10-12",
+            bags = 5.0,
+            kg = 75.0,
+            costKM = 35.0,
+            avgTemp = 12.0
+        )
+        val entry2 = PelletEntry(
+            id = 2,
+            dateISO = "2025-10-20",
+            bags = 5.0,
+            kg = 75.0,
+            costKM = 35.0,
+            avgTemp = -2.0
+        )
+        val entry3 = PelletEntry(
+            id = 3,
+            dateISO = "2025-10-22",
+            bags = 5.0,
+            kg = 75.0,
+            costKM = 35.0,
+            avgTemp = -3.0
+        )
+        val entry4 = PelletEntry(
+            id = 4,
+            dateISO = "2025-10-24",
+            bags = 5.0,
+            kg = 75.0,
+            costKM = 35.0,
+            avgTemp = -2.0
+        )
+
+        val settings = AppSettings(currentSeason = "2025/2026")
+        val metrics = PelletCalculator.computeMetrics(listOf(entry1, entry2, entry3, entry4), settings)
+
+        val warmZone = metrics.tempZoneStats.first { it.zoneName.contains("Iznad 10°C") }
+        val frostZone = metrics.tempZoneStats.first { it.zoneName.contains("Ispod 0°C") }
+
+        // Blago (>10°C) ima 8 dana sa po 0.625 vreća/dan (5 vreća / 8 dana)
+        assertEquals(8, warmZone.sampleCount)
+        assertEquals(0.625, warmZone.avgBags, 0.001)
+
+        // Mraz (<0°C) ima zatvorene cikluse od po 2 dana sa po 2.5 vreća/dan (5 vreća / 2 dana)
+        assertTrue(frostZone.sampleCount >= 4)
+        assertTrue(frostZone.avgBags > warmZone.avgBags)
+        assertEquals(2.5, frostZone.avgBags, 0.9)
+    }
+
+    @Test
+    fun testHeatingCycleWithHistoricalOpenMeteoTemps() {
+        val entry1 = PelletEntry(
+            id = 1,
+            dateISO = "2025-10-12",
+            bags = 4.0,
+            kg = 60.0,
+            costKM = 28.0,
+            avgTemp = 12.0
+        )
+        val entry2 = PelletEntry(
+            id = 2,
+            dateISO = "2025-10-16", // 4 dana razmaka -> 1 vreća/dan
+            bags = 2.0,
+            kg = 30.0,
+            costKM = 14.0,
+            avgTemp = 4.0
+        )
+
+        // Dani 12 i 13 su bili topli (>10°C), a dani 14 i 15 su zahladili na 3°C i 4°C (Hladno 0-5°C)
+        val historicalTemps = mapOf(
+            "2025-10-12" to 12.0,
+            "2025-10-13" to 11.0,
+            "2025-10-14" to 3.0,
+            "2025-10-15" to 4.0
+        )
+
+        val settings = AppSettings(currentSeason = "2025/2026")
+        val metrics = PelletCalculator.computeMetrics(
+            entries = listOf(entry1, entry2),
+            settings = settings,
+            historicalTemps = historicalTemps
+        )
+
+        val warmZone = metrics.tempZoneStats.first { it.zoneName.contains("Iznad 10°C") }
+        val coldZone = metrics.tempZoneStats.first { it.zoneName.contains("0°C do 5°C") }
+
+        // Pošto su 4 vreće podijeljene na 4 dana (1.0 vreća/dan):
+        // 2 dana idu u warmZone (12. i 13.10.), a 2 dana idu u coldZone (14. i 15.10.)
+        assertEquals(2, warmZone.sampleCount)
+        assertEquals(1.0, warmZone.avgBags, 0.001)
+        assertTrue(coldZone.sampleCount >= 2)
+    }
+
+    @Test
+    fun testDailyAverageRecordedBags() {
+        // Prvo sipanje: 10.10.2025 (10 vreća)
+        // Drugo sipanje: 20.10.2025 (12 vreća)
+        // Ukupno: 22 vreće
+        // Period od prvog do zadnjeg zabilježenog dana sipanja: od 10.10. do 20.10. = 11 dana
+        // Prosjek: 22 / 11 = 2.0 vr/dan
+        val e1 = PelletEntry(id = 1, dateISO = "2025-10-10", bags = 10.0, kg = 150.0, costKM = 70.0)
+        val e2 = PelletEntry(id = 2, dateISO = "2025-10-20", bags = 12.0, kg = 180.0, costKM = 84.0)
+
+        val settings = AppSettings(currentSeason = "2025/2026")
+        val metrics = PelletCalculator.computeMetrics(listOf(e1, e2), settings)
+
+        assertEquals(11, metrics.daysRecordedInSeason)
+        assertEquals(2.0, metrics.avgBagsRecordedPerDay, 0.001)
+    }
 }

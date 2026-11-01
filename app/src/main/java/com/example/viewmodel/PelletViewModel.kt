@@ -84,14 +84,18 @@ class PelletViewModel(
         PelletCalculator.computeInventory(emptyList(), emptyList())
     )
 
+    // Istorijske temperature po datumima sa Open-Meteo (za raspodjelu ciklusa potrošnje)
+    val historicalWeatherMap = MutableStateFlow<Map<String, Double>>(emptyMap())
+
     // Metrike za industriju (kg/m², kg/kW, KM/m², KM/dan, temp) za odabranu sezonu
     val industryMetrics: StateFlow<IndustryMetrics> = combine(
         allEntries,
         settings,
-        selectedSeasonFilter
-    ) { entries, sett, seasonFilter ->
+        selectedSeasonFilter,
+        historicalWeatherMap
+    ) { entries, sett, seasonFilter, histMap ->
         val season = seasonFilter ?: sett.currentSeason
-        PelletCalculator.computeMetrics(entries, sett, targetSeason = season)
+        PelletCalculator.computeMetrics(entries, sett, targetSeason = season, historicalTemps = histMap)
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
@@ -196,6 +200,20 @@ class PelletViewModel(
                     }
                 }
 
+                // 3. Preuzimanje punog temperaturnog niza za sve dane grijanja u sezoni (za model ciklusa grijanja)
+                val seasonEntries = entries.filter { PelletCalculator.isDateInSeason(it.dateISO, sett.currentSeason) }
+                if (seasonEntries.isNotEmpty()) {
+                    val minDate = seasonEntries.minOf { it.dateISO }
+                    val maxDate = seasonEntries.maxOf { it.dateISO }
+                    val rangeEnd = if (today > maxDate) today else maxDate
+                    val rangeTemps = WeatherService.fetchDailyTemperaturesForRange(city, minDate, rangeEnd)
+                    if (rangeTemps.isNotEmpty()) {
+                        val merged = historicalWeatherMap.value.toMutableMap()
+                        merged.putAll(rangeTemps)
+                        historicalWeatherMap.value = merged
+                    }
+                }
+
                 if (notify) {
                     val msg = if (updatedCount > 0) "Ažurirane temperature za $updatedCount dana" else "Temperature za sezonu su ažurne"
                     _notification.emit(UiNotification(msg, isWarning = false))
@@ -235,7 +253,12 @@ class PelletViewModel(
     fun exportSeasonToExcel(context: Context, season: String) {
         val sett = settings.value
         val inv = inventorySummary.value
-        val met = PelletCalculator.computeMetrics(allEntries.value, sett, targetSeason = season)
+        val met = PelletCalculator.computeMetrics(
+            entries = allEntries.value,
+            settings = sett,
+            targetSeason = season,
+            historicalTemps = historicalWeatherMap.value
+        )
         val csv = ExcelExporter.generateSeasonCsv(
             season = season,
             settings = sett,
@@ -252,7 +275,12 @@ class PelletViewModel(
     fun getSeasonCsvContent(season: String): String {
         val sett = settings.value
         val inv = inventorySummary.value
-        val met = PelletCalculator.computeMetrics(allEntries.value, sett, targetSeason = season)
+        val met = PelletCalculator.computeMetrics(
+            entries = allEntries.value,
+            settings = sett,
+            targetSeason = season,
+            historicalTemps = historicalWeatherMap.value
+        )
         return ExcelExporter.generateSeasonCsv(
             season = season,
             settings = sett,

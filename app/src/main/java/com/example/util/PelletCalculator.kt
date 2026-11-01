@@ -294,7 +294,8 @@ object PelletCalculator {
     fun computeMetrics(
         entries: List<PelletEntry>,
         settings: AppSettings,
-        targetSeason: String? = null
+        targetSeason: String? = null,
+        historicalTemps: Map<String, Double> = emptyMap()
     ): IndustryMetrics {
         val seasonStr = targetSeason ?: settings.currentSeason
         val isAll = seasonStr.equals("ALL", ignoreCase = true)
@@ -319,6 +320,17 @@ object PelletCalculator {
 
         val daysForDailyAverage = if (seasonDaysElapsed > 0) seasonDaysElapsed else activeDaysCount
 
+        // Broj kalendarskih dana od prvog do posljednjeg zabilježenog dana sipanja u sezoni
+        val daysRecordedInSeason = if (validEntries.isNotEmpty()) {
+            val firstDate = validEntries.minOf { it.dateISO }
+            val lastDate = validEntries.maxOf { it.dateISO }
+            (calendarDaysBetween(firstDate, lastDate) + 1L).toInt().coerceAtLeast(1)
+        } else 0
+
+        val avgBagsRecordedPerDay = if (daysRecordedInSeason > 0) {
+            validEntries.sumOf { it.bags } / daysRecordedInSeason.toDouble()
+        } else 0.0
+
         val area = if (settings.heatingAreaM2 > 0) settings.heatingAreaM2 else 100.0
         val power = if (settings.boilerPowerKw > 0) settings.boilerPowerKw else 20.0
 
@@ -328,20 +340,91 @@ object PelletCalculator {
         val kmPerDay = if (daysForDailyAverage > 0) totalCostKM / daysForDailyAverage.toDouble() else 0.0
         val avgBagsPerDay = if (daysForDailyAverage > 0) validEntries.sumOf { it.bags } / daysForDailyAverage.toDouble() else 0.0
 
-        // Analiza potrošnje po temperaturnim zonama (isključivo za odabranu sezonu)
+        // Analiza potrošnje po temperaturnim zonama (isključivo za odabranu sezonu).
+        // MODEL CIKLUSA GRIJANJA:
+        // Korisnici sipaju npr. 4-5 vreća odjednom, koje griju narednih N dana do sljedećeg ubacivanja.
+        // Tih N vreća se srazmjerno raspoređuje na dane intervala (vreće / broj dana),
+        // a svaki dan se povezuje sa temperaturom i svrstava u odgovarajući temperaturni rang.
         val tempBands = mutableMapOf<String, MutableList<Double>>()
         tempBands["Ispod 0°C (Mraz)"] = mutableListOf()
         tempBands["0°C do 5°C (Hladno)"] = mutableListOf()
         tempBands["5°C do 10°C (Svježe)"] = mutableListOf()
         tempBands["Iznad 10°C (Blago)"] = mutableListOf()
 
-        validEntries.forEach { entry ->
-            entry.avgTemp?.let { temp ->
-                when {
-                    temp < 0.0 -> tempBands["Ispod 0°C (Mraz)"]?.add(entry.bags)
-                    temp <= 5.0 -> tempBands["0°C do 5°C (Hladno)"]?.add(entry.bags)
-                    temp <= 10.0 -> tempBands["5°C do 10°C (Svježe)"]?.add(entry.bags)
-                    else -> tempBands["Iznad 10°C (Blago)"]?.add(entry.bags)
+        val sortedEntries = validEntries.sortedBy { it.dateISO }
+        val todayISO = getTodayISO()
+
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+
+        // Mapa poznatih temperatura po datumu iz unosa, dopunjena tačnim Open-Meteo temperaturama za dane ciklusa
+        val tempByDate = validEntries.associate { it.dateISO to it.avgTemp }.toMutableMap()
+        historicalTemps.forEach { (date, temp) ->
+            if (tempByDate[date] == null) {
+                tempByDate[date] = temp
+            }
+        }
+
+        for (i in sortedEntries.indices) {
+            val entry = sortedEntries[i]
+            val entryDate = entry.dateISO
+            val bags = entry.bags
+
+            // Odredi interval do sljedećeg ubacivanja
+            val daysInCycle: Int = if (i < sortedEntries.size - 1) {
+                val nextDate = sortedEntries[i + 1].dateISO
+                val diff = calendarDaysBetween(entryDate, nextDate).toInt()
+                diff.coerceIn(1, 14)
+            } else {
+                // Posljednje ubacivanje: ako postoji prethodni interval, koristi ga kao realnu procjenu ciklusa
+                val typicalCycle = if (i > 0) {
+                    calendarDaysBetween(sortedEntries[i - 1].dateISO, entryDate).toInt().coerceIn(1, 14)
+                } else 1
+
+                val gapToToday = calendarDaysBetween(entryDate, todayISO).toInt()
+                if (todayISO >= entryDate && gapToToday in 0..typicalCycle) {
+                    (gapToToday + 1).coerceIn(1, typicalCycle)
+                } else {
+                    typicalCycle
+                }
+            }
+
+            val dailyBagsForCycle = bags / daysInCycle.toDouble()
+
+            // Prođi kroz sve dane ciklusa i dodijeli dnevnu potrošnju u temperaturne zone
+            try {
+                val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+                    val parsed = sdf.parse(entryDate)
+                    if (parsed != null) time = parsed
+                }
+
+                for (dayOffset in 0 until daysInCycle) {
+                    val curDateISO = sdf.format(cal.time)
+
+                    // Temperatura za taj dan (iz unosa ili interpolirano/referentno iz ciklusa)
+                    val dayTemp = tempByDate[curDateISO] ?: entry.avgTemp
+
+                    if (dayTemp != null) {
+                        when {
+                            dayTemp < 0.0 -> tempBands["Ispod 0°C (Mraz)"]?.add(dailyBagsForCycle)
+                            dayTemp <= 5.0 -> tempBands["0°C do 5°C (Hladno)"]?.add(dailyBagsForCycle)
+                            dayTemp <= 10.0 -> tempBands["5°C do 10°C (Svježe)"]?.add(dailyBagsForCycle)
+                            else -> tempBands["Iznad 10°C (Blago)"]?.add(dailyBagsForCycle)
+                        }
+                    }
+
+                    cal.add(Calendar.DAY_OF_MONTH, 1)
+                }
+            } catch (_: Exception) {
+                // Fallback na sam unos ako dođe do greške sa parsiranjem datuma
+                entry.avgTemp?.let { temp ->
+                    when {
+                        temp < 0.0 -> tempBands["Ispod 0°C (Mraz)"]?.add(entry.bags)
+                        temp <= 5.0 -> tempBands["0°C do 5°C (Hladno)"]?.add(entry.bags)
+                        temp <= 10.0 -> tempBands["5°C do 10°C (Svježe)"]?.add(entry.bags)
+                        else -> tempBands["Iznad 10°C (Blago)"]?.add(entry.bags)
+                    }
                 }
             }
         }
@@ -363,7 +446,9 @@ object PelletCalculator {
             activeDaysCount = activeDaysCount,
             totalKg = totalKg,
             totalCostKM = totalCostKM,
-            tempZoneStats = tempAnalysis
+            tempZoneStats = tempAnalysis,
+            avgBagsRecordedPerDay = avgBagsRecordedPerDay,
+            daysRecordedInSeason = daysRecordedInSeason
         )
     }
 
@@ -535,7 +620,9 @@ data class IndustryMetrics(
     val activeDaysCount: Int,
     val totalKg: Double,
     val totalCostKM: Double,
-    val tempZoneStats: List<TempZoneStat>
+    val tempZoneStats: List<TempZoneStat>,
+    val avgBagsRecordedPerDay: Double = avgBagsPerDay,
+    val daysRecordedInSeason: Int = 0
 )
 
 data class TempZoneStat(

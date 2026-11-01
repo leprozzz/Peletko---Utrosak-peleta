@@ -54,6 +54,7 @@ object WeatherService {
     )
 
     private val cache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, WeatherResult>>()
+    private val dailyTempCache = java.util.concurrent.ConcurrentHashMap<String, Double>()
 
     suspend fun fetchWeather(cityName: String, dateISO: String, forceFresh: Boolean = false): WeatherResult? = withContext(Dispatchers.IO) {
         val targetCity = cityName.ifBlank { "Sarajevo" }
@@ -84,6 +85,7 @@ object WeatherService {
         val res = executeWeatherQuery(forecastUrl, targetCity)
         if (res != null) {
             cache[cacheKey] = Pair(now, res)
+            dailyTempCache[cacheKey] = res.avgTemp
             return@withContext res
         }
 
@@ -96,8 +98,94 @@ object WeatherService {
         val archiveRes = executeWeatherQuery(archiveUrl, targetCity)
         if (archiveRes != null) {
             cache[cacheKey] = Pair(now, archiveRes)
+            dailyTempCache[cacheKey] = archiveRes.avgTemp
         }
         return@withContext archiveRes
+    }
+
+    /**
+     * Preuzima dnevne prosječne temperature sa Open-Meteo za raspon datuma.
+     * Koristi se za preciznu raspodjelu potrošnje peleta po danima grijanja u ciklusu.
+     */
+    suspend fun fetchDailyTemperaturesForRange(
+        cityName: String,
+        startDateISO: String,
+        endDateISO: String
+    ): Map<String, Double> = withContext(Dispatchers.IO) {
+        val targetCity = cityName.ifBlank { "Sarajevo" }
+        val resultMap = mutableMapOf<String, Double>()
+        if (startDateISO.isBlank() || endDateISO.isBlank() || startDateISO > endDateISO) {
+            return@withContext resultMap
+        }
+
+        val coords = resolveCoordinates(targetCity) ?: Pair(43.8563, 18.4131)
+        val lat = coords.first
+        val lon = coords.second
+
+        // 1. Arhivski podaci za prošle datume
+        val archiveUrl = "https://archive-api.open-meteo.com/v1/archive?" +
+                "latitude=$lat&longitude=$lon" +
+                "&daily=temperature_2m_mean" +
+                "&timezone=auto&start_date=$startDateISO&end_date=$endDateISO"
+
+        val archiveMap = executeDailyRangeQuery(archiveUrl)
+        resultMap.putAll(archiveMap)
+
+        // 2. Ako neki datumi nisu u arhivi (npr. nedavni dani ili tekući dan), dopuni sa prognoze
+        val todayISO = com.example.util.PelletCalculator.getTodayISO()
+        val needsForecast = endDateISO >= todayISO || archiveMap.isEmpty()
+        if (needsForecast) {
+            val forecastUrl = "https://api.open-meteo.com/v1/forecast?" +
+                    "latitude=$lat&longitude=$lon" +
+                    "&daily=temperature_2m_mean" +
+                    "&timezone=auto&start_date=$startDateISO&end_date=$endDateISO"
+            val forecastMap = executeDailyRangeQuery(forecastUrl)
+            forecastMap.forEach { (date, temp) ->
+                if (!resultMap.containsKey(date)) {
+                    resultMap[date] = temp
+                }
+            }
+        }
+
+        // Sačuvaj u keš
+        resultMap.forEach { (date, temp) ->
+            val cacheKey = "${targetCity.lowercase().trim()}_$date"
+            dailyTempCache[cacheKey] = temp
+        }
+
+        resultMap
+    }
+
+    private fun executeDailyRangeQuery(url: String): Map<String, Double> {
+        val result = mutableMapOf<String, Double>()
+        try {
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", "UtrosakPeletaApp/1.0")
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return emptyMap()
+                val body = response.body?.string() ?: return emptyMap()
+                val json = JSONObject(body)
+                if (json.has("daily")) {
+                    val daily = json.getJSONObject("daily")
+                    if (daily.has("time") && daily.has("temperature_2m_mean")) {
+                        val times = daily.getJSONArray("time")
+                        val temps = daily.getJSONArray("temperature_2m_mean")
+                        for (i in 0 until times.length()) {
+                            val timeStr = times.getString(i)
+                            if (!temps.isNull(i)) {
+                                val tempVal = temps.getDouble(i)
+                                result[timeStr] = (tempVal * 10).toInt() / 10.0
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {
+        }
+        return result
     }
 
     private fun executeWeatherQuery(url: String, cityName: String): WeatherResult? {

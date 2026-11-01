@@ -48,7 +48,7 @@ fun HistoryAndStatsScreen(
     selectedSeason: String? = null,
     onSelectSeason: (String?) -> Unit = {},
     onExportExcel: ((String) -> Unit)? = null,
-    initialTab: Int = 0, // 0 = Istorija, 1 = Statistika
+    initialTab: Int = 0, // 0 = Statistika, 1 = Istorija
     onBack: () -> Unit,
     onSyncWeather: () -> Unit = {},
     onEditEntry: (PelletEntry) -> Unit,
@@ -77,7 +77,7 @@ fun HistoryAndStatsScreen(
                                 .padding(3.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Tab 0: Istorija
+                            // Tab 0: Detaljna statistika (prvi tab)
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
@@ -88,18 +88,18 @@ fun HistoryAndStatsScreen(
                                     )
                                     .clickable { selectedTab = 0 }
                                     .padding(vertical = 6.dp)
-                                    .testTag("tab_history_btn"),
+                                    .testTag("tab_stats_btn"),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "${AppStrings.get("history_tab", lang)} (${entries.size})",
+                                    text = AppStrings.get("stats_tab", lang),
                                     fontSize = 13.sp,
                                     fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Medium,
                                     color = if (selectedTab == 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
 
-                            // Tab 1: Detaljna statistika
+                            // Tab 1: Istorija (drugi tab)
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
@@ -110,11 +110,11 @@ fun HistoryAndStatsScreen(
                                     )
                                     .clickable { selectedTab = 1 }
                                     .padding(vertical = 6.dp)
-                                    .testTag("tab_stats_btn"),
+                                    .testTag("tab_history_btn"),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = AppStrings.get("stats_tab", lang),
+                                    text = "${AppStrings.get("history_tab", lang)} (${entries.size})",
                                     fontSize = 13.sp,
                                     fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Medium,
                                     color = if (selectedTab == 1) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
@@ -159,6 +159,16 @@ fun HistoryAndStatsScreen(
                 .padding(padding)
         ) {
             if (selectedTab == 0) {
+                StatisticsScreen(
+                    metrics = metrics,
+                    settings = settings,
+                    entries = entries,
+                    availableSeasons = availableSeasons,
+                    selectedSeason = selectedSeason,
+                    onSelectSeason = onSelectSeason,
+                    onExportExcel = onExportExcel
+                )
+            } else {
                 HistoryScreen(
                     entries = entries,
                     currency = curr,
@@ -168,16 +178,6 @@ fun HistoryAndStatsScreen(
                     onSelectSeason = onSelectSeason,
                     onEditEntry = onEditEntry,
                     onDeleteEntry = onDeleteEntry
-                )
-            } else {
-                StatisticsScreen(
-                    metrics = metrics,
-                    settings = settings,
-                    entries = entries,
-                    availableSeasons = availableSeasons,
-                    selectedSeason = selectedSeason,
-                    onSelectSeason = onSelectSeason,
-                    onExportExcel = onExportExcel
                 )
             }
         }
